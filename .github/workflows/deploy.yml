@@ -18,7 +18,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       # ── 3. Install dependencies & build MTA ────────────────────────
@@ -81,7 +81,7 @@ jobs:
           COMMIT_MSG=$(git log -1 --format='%s' | tr -cd 'a-zA-Z0-9 \-._~:/?#@!$&()*+,;=%')
           RESPONSE=$(curl --silent \
             --request POST \
-            --url "${TMS_URI}/v2/nodes/upload" \
+            --url "${TMS_URI}/v2/nodes/export" \
             --header "Authorization: Bearer ${{ steps.token.outputs.access_token }}" \
             --header "Content-Type: application/json" \
             --data "{
