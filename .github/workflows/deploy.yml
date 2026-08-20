@@ -78,18 +78,20 @@ jobs:
           TMS_SERVICE_KEY: ${{ secrets.TMS_SERVICE_KEY }}
         run: |
           TMS_URI=$(echo "$TMS_SERVICE_KEY" | jq -r '.uri')
+          COMMIT_AUTHOR=$(git log -1 --format='%an')
           RESPONSE=$(curl --silent \
             --request POST \
             --url "${TMS_URI}/v2/nodes/upload" \
             --header "Authorization: Bearer ${{ steps.token.outputs.access_token }}" \
             --header "Content-Type: application/json" \
-            --data '{
-              "nodeName": "GitHubActions-Dev",
-              "contentType": "MTA",
-              "storageType": "FILE",
-              "entries": [{ "uri": "${{ steps.upload.outputs.file_id }}" }],
-              "description": "Automated transport from GitHub Actions - ${{ github.sha }}"
-            }')
+            --data "{
+              \"nodeName\": \"GitHubActions-Dev\",
+              \"contentType\": \"MTA\",
+              \"storageType\": \"FILE\",
+              \"owner\": \"${COMMIT_AUTHOR}\",
+              \"entries\": [{ \"uri\": \"${{ steps.upload.outputs.file_id }}\" }],
+              \"description\": \"Automated transport from GitHub Actions - ${{ github.sha }}\"
+            }")
           echo "Transport response: $RESPONSE"
           TR_ID=$(echo "$RESPONSE" | jq -r '.transportRequestId')
           if [ "$TR_ID" = "null" ] || [ -z "$TR_ID" ]; then
