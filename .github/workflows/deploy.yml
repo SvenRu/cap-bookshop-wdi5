@@ -36,7 +36,7 @@ jobs:
       - name: Get OAuth token
         id: token
         run: |
-          RESPONSE=$(curl --silent --fail-with-body \
+          RESPONSE=$(curl --silent \
             --request POST \
             --url "${{ secrets.CTMS_UAA_URL }}/oauth/token" \
             --header "Content-Type: application/x-www-form-urlencoded" \
