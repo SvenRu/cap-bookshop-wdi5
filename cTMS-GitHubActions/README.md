@@ -64,16 +64,15 @@ Create the workflow file `.github/workflows/deploy.yml` in your repository. The 
 
 ## Step 2: Add cTMS Credentials as GitHub Secrets
 
-The workflow reads cTMS connection details from GitHub repository secrets. Go to **GitHub repo → Settings → Secrets and variables → Actions → New repository secret** and add:
+The workflow needs only **one secret**: the full cTMS service key JSON. Go to **GitHub repo → Settings → Secrets and variables → Actions → New repository secret** and add:
 
-| Secret name | Value from service key |
+| Secret name | Value |
 |---|---|
-| `CTMS_UAA_URL` | `uaa.url` |
-| `CTMS_CLIENT_ID` | `uaa.clientid` |
-| `CTMS_CLIENT_SECRET` | `uaa.clientsecret` |
-| `CTMS_API_URL` | `uri` |
+| `TMS_SERVICE_KEY` | The entire JSON from your cTMS service key |
 
-You find these values in the cTMS service key JSON from BTP:
+The workflow extracts `uaa.url`, `uaa.clientid`, `uaa.clientsecret`, and `uri` from the JSON at runtime using `jq`.
+
+The service key JSON looks like this:
 
 ```json
 {

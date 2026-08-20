@@ -32,55 +32,62 @@ jobs:
         run: mbt build
         # Produces: ./mta_archives/capire.bookshop_1.0.0.mtar
 
-      # ── 4. Fetch OAuth token from cTMS UAA ─────────────────────────
+      # ── 4. Parse service key & fetch OAuth token ───────────────────
       - name: Get OAuth token
         id: token
+        env:
+          TMS_SERVICE_KEY: ${{ secrets.TMS_SERVICE_KEY }}
         run: |
-          RESPONSE=$(curl --silent \
-            --request POST \
-            --url "${{ secrets.CTMS_UAA_URL }}/oauth/token" \
+          SERVICE_KEY_FILE=$(mktemp)
+          echo "$TMS_SERVICE_KEY" > "$SERVICE_KEY_FILE"
+
+          UAA_URL=$(jq -r '.uaa.url' "$SERVICE_KEY_FILE")
+          CLIENT_ID=$(jq -r '.uaa.clientid' "$SERVICE_KEY_FILE")
+          CLIENT_SECRET=$(jq -r '.uaa.clientsecret' "$SERVICE_KEY_FILE")
+
+          ACCESS_TOKEN=$(curl --fail --silent \
+            --request POST "${UAA_URL}/oauth/token" \
             --header "Content-Type: application/x-www-form-urlencoded" \
             --data-urlencode "grant_type=client_credentials" \
-            --data-urlencode "client_id=${{ secrets.CTMS_CLIENT_ID }}" \
-            --data-urlencode "client_secret=${{ secrets.CTMS_CLIENT_SECRET }}")
-          echo "UAA response: $RESPONSE"
-          TOKEN=$(echo "$RESPONSE" | jq -r '.access_token')
-          if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
-            echo "ERROR: Failed to obtain access token"
-            exit 1
-          fi
-          echo "access_token=$TOKEN" >> "$GITHUB_OUTPUT"
+            --data-urlencode "client_id=${CLIENT_ID}" \
+            --data-urlencode "client_secret=${CLIENT_SECRET}" \
+            | jq -r '.access_token')
+
+          rm -f "$SERVICE_KEY_FILE"
+          echo "access_token=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
 
       # ── 5. Upload .mtar to cTMS ────────────────────────────────────
       - name: Upload archive to cTMS
         id: upload
+        env:
+          TMS_SERVICE_KEY: ${{ secrets.TMS_SERVICE_KEY }}
         run: |
-          RESPONSE=$(curl --silent --fail \
+          TMS_URI=$(echo "$TMS_SERVICE_KEY" | jq -r '.uri')
+          RESPONSE=$(curl --fail --silent \
             --request POST \
-            --url "${{ secrets.CTMS_API_URL }}/v2/files/upload" \
+            --url "${TMS_URI}/v2/files/upload" \
             --header "Authorization: Bearer ${{ steps.token.outputs.access_token }}" \
             --form "file=@mta_archives/capire.bookshop_1.0.0.mtar")
           FILE_ID=$(echo "$RESPONSE" | jq -r '.fileId')
           echo "file_id=$FILE_ID" >> "$GITHUB_OUTPUT"
 
-      # ── 6. Create Transport Request targeting the DEV node ─────────
+      # ── 6. Create Transport Request targeting GitHubActions-Dev ───
       - name: Create Transport Request
         id: transport
+        env:
+          TMS_SERVICE_KEY: ${{ secrets.TMS_SERVICE_KEY }}
         run: |
-          RESPONSE=$(curl --silent --fail \
+          TMS_URI=$(echo "$TMS_SERVICE_KEY" | jq -r '.uri')
+          RESPONSE=$(curl --fail --silent \
             --request POST \
-            --url "${{ secrets.CTMS_API_URL }}/v2/nodes/upload" \
+            --url "${TMS_URI}/v2/nodes/upload" \
             --header "Authorization: Bearer ${{ steps.token.outputs.access_token }}" \
             --header "Content-Type: application/json" \
             --data '{
               "nodeName": "GitHubActions-Dev",
               "contentType": "MTA",
               "storageType": "FILE",
-              "entries": [
-                {
-                  "uri": "${{ steps.upload.outputs.file_id }}"
-                }
-              ],
+              "entries": [{ "uri": "${{ steps.upload.outputs.file_id }}" }],
               "description": "Automated transport from GitHub Actions — ${{ github.sha }}"
             }')
           TR_ID=$(echo "$RESPONSE" | jq -r '.transportRequestId')
