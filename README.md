@@ -11,6 +11,10 @@ https://developers.sap.com/tutorials/cicd-wdi5-cap.html
 
 Refer to the prerequisites in the SAP tutorial above.
 
+## CI/CD and Transport Management
+
+This project includes a GitHub Actions workflow that builds the MTA archive and creates a transport request in SAP Cloud Transport Management (cTMS) on every push to `main`. See [cTMS-GitHubActions/README.md](cTMS-GitHubActions/README.md) for setup instructions.
+
 ## Known Issues
 
 No known issues.
