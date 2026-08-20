@@ -79,6 +79,7 @@ jobs:
         run: |
           TMS_URI=$(echo "$TMS_SERVICE_KEY" | jq -r '.uri')
           COMMIT_AUTHOR=$(git log -1 --format='%an')
+          COMMIT_MSG=$(git log -1 --format='%s')
           RESPONSE=$(curl --silent \
             --request POST \
             --url "${TMS_URI}/v2/nodes/upload" \
@@ -88,9 +89,9 @@ jobs:
               \"nodeName\": \"GitHubActions-Dev\",
               \"contentType\": \"MTA\",
               \"storageType\": \"FILE\",
-              \"owner\": \"${COMMIT_AUTHOR}\",
+              \"namedUser\": \"${COMMIT_AUTHOR}\",
               \"entries\": [{ \"uri\": \"${{ steps.upload.outputs.file_id }}\" }],
-              \"description\": \"Automated transport from GitHub Actions - ${{ github.sha }}\"
+              \"description\": \"${{ github.sha }} ${COMMIT_MSG}\"
             }")
           echo "Transport response: $RESPONSE"
           TR_ID=$(echo "$RESPONSE" | jq -r '.transportRequestId')
