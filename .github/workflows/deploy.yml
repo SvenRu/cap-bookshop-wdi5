@@ -78,8 +78,7 @@ jobs:
           TMS_SERVICE_KEY: ${{ secrets.TMS_SERVICE_KEY }}
         run: |
           TMS_URI=$(echo "$TMS_SERVICE_KEY" | jq -r '.uri')
-          COMMIT_AUTHOR=$(git log -1 --format='%an')
-          COMMIT_MSG=$(git log -1 --format='%s')
+          COMMIT_MSG=$(git log -1 --format='%s' | tr -cd 'a-zA-Z0-9 \-._~:/?#@!$&()*+,;=%')
           RESPONSE=$(curl --silent \
             --request POST \
             --url "${TMS_URI}/v2/nodes/upload" \
@@ -89,7 +88,7 @@ jobs:
               \"nodeName\": \"GitHubActions-Dev\",
               \"contentType\": \"MTA\",
               \"storageType\": \"FILE\",
-              \"namedUser\": \"${COMMIT_AUTHOR}\",
+              \"namedUser\": \"${{ github.actor }}\",
               \"entries\": [{ \"uri\": \"${{ steps.upload.outputs.file_id }}\" }],
               \"description\": \"${{ github.sha }} ${COMMIT_MSG}\"
             }")
