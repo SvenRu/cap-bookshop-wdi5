@@ -56,9 +56,11 @@ Create the workflow file `.github/workflows/deploy.yml` in your repository. The 
 
 1. Checks out the code and installs dependencies
 2. Builds the MTA archive with `mbt`
-3. Fetches an OAuth token from the cTMS UAA
+3. Fetches an OAuth token from the cTMS UAA (parsed from the `TMS_SERVICE_KEY` secret)
 4. Uploads the `.mtar` to cTMS
-5. Creates a Transport Request targeting the `DEV` node
+5. Creates a Transport Request targeting the `GitHubActions-Dev` node with:
+   - **namedUser**: the GitHub actor who triggered the workflow
+   - **description**: shortened commit SHA + commit message (special characters stripped)
 
 ---
 
@@ -121,6 +123,67 @@ Then go to **GitHub repo → Actions tab** and watch the `Build and Transport to
 - A green checkmark on the Actions run
 - A job summary showing the **File ID** and **Transport Request ID** from cTMS
 - A new transport request visible in the cTMS UI under the `GitHubActions-Dev` import queue
+
+---
+
+## Adapting to Your Transport Landscape
+
+The workflow only needs to know the **entry node** — the first node in your cTMS transport route where the artifact is uploaded. cTMS takes care of forwarding it along the configured route from there, regardless of how many nodes your landscape has (DEV → QA, DEV → QA → PRD, or any other shape).
+
+The entry node name is set in one place in `.github/workflows/deploy.yml`:
+
+```bash
+\"nodeName\": \"GitHubActions-Dev\"
+```
+
+Replace `GitHubActions-Dev` with whatever your entry node is named in **cTMS UI → Landscape Configuration → Transport Nodes**. Node names are case-sensitive and must match exactly.
+
+---
+
+## Customizing the Transport Description
+
+By default the description is auto-generated as `<short-sha> - <commit message>`. There are two ways to override it.
+
+### Option A — One-off: trigger manually with a custom description
+
+Add a `workflow_dispatch` trigger with an optional input to `.github/workflows/deploy.yml`:
+
+```yaml
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      description:
+        description: 'Transport description'
+        required: false
+        default: ''
+```
+
+Then in the Create Transport Request step, fall back to the auto-generated value when no input is provided:
+
+```bash
+COMMIT_MSG=$(git log -1 --format='%s' | tr -cd 'a-zA-Z0-9 \-._~:/?#@!$&()*+,;=%')
+DESCRIPTION="${{ github.event.inputs.description }}"
+if [ -z "$DESCRIPTION" ]; then
+  DESCRIPTION="${GITHUB_SHA::7} - ${COMMIT_MSG}"
+fi
+```
+
+And use `${DESCRIPTION}` in the `--data` JSON instead of the inline value.
+
+You can then trigger the workflow manually from **GitHub repo → Actions → Build and Transport to cTMS → Run workflow** and type in a custom description.
+
+### Option B — Permanent: edit the workflow file
+
+Simply change the `description` line in `.github/workflows/deploy.yml`:
+
+```bash
+\"description\": \"your custom text here\"
+```
+
+Any static text or shell variable is valid as long as it only contains characters from the allowed set: Latin letters, numbers, spaces, and `-._~:\/?#[]@!$&()*+,;=%`.
 
 ---
 

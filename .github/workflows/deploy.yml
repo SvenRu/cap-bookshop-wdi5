@@ -90,7 +90,7 @@ jobs:
               \"storageType\": \"FILE\",
               \"namedUser\": \"${{ github.actor }}\",
               \"entries\": [{ \"uri\": \"${{ steps.upload.outputs.file_id }}\" }],
-              \"description\": \"${{ github.sha }} ${COMMIT_MSG}\"
+              \"description\": \"${GITHUB_SHA::7} - ${COMMIT_MSG}\"
             }")
           echo "Transport response: $RESPONSE"
           TR_ID=$(echo "$RESPONSE" | jq -r '.transportRequestId')
