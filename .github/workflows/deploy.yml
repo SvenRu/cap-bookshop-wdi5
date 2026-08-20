@@ -36,14 +36,19 @@ jobs:
       - name: Get OAuth token
         id: token
         run: |
-          RESPONSE=$(curl --silent --fail \
+          RESPONSE=$(curl --silent --fail-with-body \
             --request POST \
             --url "${{ secrets.CTMS_UAA_URL }}/oauth/token" \
             --header "Content-Type: application/x-www-form-urlencoded" \
             --data-urlencode "grant_type=client_credentials" \
             --data-urlencode "client_id=${{ secrets.CTMS_CLIENT_ID }}" \
             --data-urlencode "client_secret=${{ secrets.CTMS_CLIENT_SECRET }}")
+          echo "UAA response: $RESPONSE"
           TOKEN=$(echo "$RESPONSE" | jq -r '.access_token')
+          if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
+            echo "ERROR: Failed to obtain access token"
+            exit 1
+          fi
           echo "access_token=$TOKEN" >> "$GITHUB_OUTPUT"
 
       # ── 5. Upload .mtar to cTMS ────────────────────────────────────
