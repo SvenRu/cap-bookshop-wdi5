@@ -78,7 +78,7 @@ jobs:
           TMS_SERVICE_KEY: ${{ secrets.TMS_SERVICE_KEY }}
         run: |
           TMS_URI=$(echo "$TMS_SERVICE_KEY" | jq -r '.uri')
-          RESPONSE=$(curl --fail --silent \
+          RESPONSE=$(curl --silent \
             --request POST \
             --url "${TMS_URI}/v2/nodes/upload" \
             --header "Authorization: Bearer ${{ steps.token.outputs.access_token }}" \
@@ -90,7 +90,12 @@ jobs:
               "entries": [{ "uri": "${{ steps.upload.outputs.file_id }}" }],
               "description": "Automated transport from GitHub Actions — ${{ github.sha }}"
             }')
+          echo "Transport response: $RESPONSE"
           TR_ID=$(echo "$RESPONSE" | jq -r '.transportRequestId')
+          if [ "$TR_ID" = "null" ] || [ -z "$TR_ID" ]; then
+            echo "ERROR: Failed to create transport request"
+            exit 1
+          fi
           echo "transport_request_id=$TR_ID" >> "$GITHUB_OUTPUT"
           echo "Transport Request created: $TR_ID"
 
