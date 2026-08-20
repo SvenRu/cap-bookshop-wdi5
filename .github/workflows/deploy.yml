@@ -88,7 +88,7 @@ jobs:
               "contentType": "MTA",
               "storageType": "FILE",
               "entries": [{ "uri": "${{ steps.upload.outputs.file_id }}" }],
-              "description": "Automated transport from GitHub Actions — ${{ github.sha }}"
+              "description": "Automated transport from GitHub Actions - ${{ github.sha }}"
             }')
           echo "Transport response: $RESPONSE"
           TR_ID=$(echo "$RESPONSE" | jq -r '.transportRequestId')
