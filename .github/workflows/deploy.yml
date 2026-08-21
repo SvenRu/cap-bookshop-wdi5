@@ -79,18 +79,25 @@ jobs:
         run: |
           TMS_URI=$(echo "$TMS_SERVICE_KEY" | jq -r '.uri')
           COMMIT_MSG=$(git log -1 --format='%s' | tr -cd 'a-zA-Z0-9 \-._~:/?#@!$&()*+,;=%')
+
+          # ── Customize transport metadata here ──────────────────────
+          TRANSPORT_NODE="GitHubActions-Dev"
+          TRANSPORT_USER="${{ github.actor }}"
+          TRANSPORT_DESC="${GITHUB_SHA::7} - ${COMMIT_MSG}"
+          # ───────────────────────────────────────────────────────────
+
           RESPONSE=$(curl --silent \
             --request POST \
             --url "${TMS_URI}/v2/nodes/export" \
             --header "Authorization: Bearer ${{ steps.token.outputs.access_token }}" \
             --header "Content-Type: application/json" \
             --data "{
-              \"nodeName\": \"GitHubActions-Dev\",
+              \"nodeName\": \"${TRANSPORT_NODE}\",
               \"contentType\": \"MTA\",
               \"storageType\": \"FILE\",
-              \"namedUser\": \"${{ github.actor }}\",
+              \"namedUser\": \"${TRANSPORT_USER}\",
               \"entries\": [{ \"uri\": \"${{ steps.upload.outputs.file_id }}\" }],
-              \"description\": \"${GITHUB_SHA::7} - ${COMMIT_MSG}\"
+              \"description\": \"${TRANSPORT_DESC}\"
             }")
           echo "Transport response: $RESPONSE"
           TR_ID=$(echo "$RESPONSE" | jq -r '.transportRequestId')

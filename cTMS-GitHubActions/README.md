@@ -217,12 +217,12 @@ Returns a `fileId` — a reference to the binary stored in cTMS. The file is not
 ### Step 5 — Create Transport Request
 
 ```
-POST {uri}/v2/nodes/upload
+POST {uri}/v2/nodes/export
 Authorization: Bearer {token}
 Content-Type: application/json
 
 {
-  "nodeName": "DEV",        ← must match a node name in your landscape
+  "nodeName": "GitHubActions-Dev",
   "contentType": "MTA",
   "storageType": "FILE",
   "entries": [{ "uri": "{fileId}" }],
@@ -230,34 +230,7 @@ Content-Type: application/json
 }
 ```
 
-This creates a Transport Request and queues the uploaded file for import into the `DEV` node's import queue. cTMS then forwards it along your configured route to QA and PRD.
-
----
-
-## Step 4: Handling the QA → PRD Promotion
-
-By default, cTMS requires a **manual import trigger** between nodes. This is intentional — it's your approval gate before production.
-
-You have two options:
-
-**Option A — Manual (recommended for most teams)**
-A release manager logs into the cTMS UI and clicks **Import** on the transport request in the QA node. After validation, they repeat for PRD.
-
-**Option B — Automated via API (for mature pipelines)**
-Add another GitHub Actions job (or a separate `workflow_dispatch` workflow) that calls:
-
-```bash
-# Trigger import into a specific node
-POST {uri}/v2/nodes/{nodeId}/importRequests
-Authorization: Bearer {token}
-Content-Type: application/json
-
-{
-  "transportRequests": ["{transportRequestId}"]
-}
-```
-
-This is useful for QA if you have automated tests gating the PRD promotion, but **use with caution for PRD** — automated deploys to production require strong confidence in your test coverage.
+This creates a Transport Request at the entry node and cTMS forwards it along the configured route. From here, importing and promoting through the landscape is handled in the cTMS UI by the responsible team.
 
 ---
 
@@ -265,11 +238,10 @@ This is useful for QA if you have automated tests gating the PRD promotion, but 
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `401 Unauthorized` on file upload | Expired or missing token | Check UAA URL and credentials; ensure `grant_type=client_credentials` |
-| `404` on `/v2/nodes/upload` | Wrong `CTMS_API_URL` | Use the `uri` field from the service key, not the UAA URL |
+| `401 Unauthorized` on token request | Wrong credentials or UAA URL | Check the `TMS_SERVICE_KEY` secret — ensure it is the full service key JSON |
+| `404` on `/v2/nodes/export` | Wrong `uri` in service key | Use the `uri` field, not the `uaa.url` |
 | `nodeName` not found error | Node name mismatch | Check exact node name spelling in cTMS Landscape Configuration |
 | `.mtar` not found | Build output path wrong | Run `mbt build` locally and check where it writes the archive |
-| Transport stuck in import queue | No auto-import configured | Trigger manually in cTMS UI or use the importRequests API |
 
 ---
 
@@ -294,6 +266,76 @@ This is useful for QA if you have automated tests gating the PRD promotion, but 
 | Promote to PRD | cTMS (manual or API trigger) |
 
 With this setup, every push to `main` results in a ready-to-import transport request in cTMS — your infrastructure team keeps control of when it lands in QA and PRD, while developers never touch the transport process manually.
+
+---
+
+## Modifying the Transport Creation
+
+The workflow currently uses the **export** endpoint, but depending on your setup you may want the **upload** endpoint instead. Here is the difference:
+
+| | Export (`/v2/nodes/export`) | Upload (`/v2/nodes/upload`) |
+|---|---|---|
+| **Concept** | Simulate an export from an environment | Directly place a transport in a specific node |
+| **`nodeName`** | Source node (e.g. `GitHubActions-Dev`) | Target node (e.g. `GitHubActions-QA`) |
+| **Where transport appears** | In the next node in the configured route | In the named node's import queue |
+| **When to use** | You build in CI and want cTMS to route from DEV onwards | You want to push directly to a specific node, skipping earlier nodes |
+
+**Use export** when your pipeline represents a DEV build and you want cTMS to own the routing from there.
+
+**Use upload** when you want to inject a transport directly into a specific node regardless of the landscape route — useful for hotfixes or when there is no source node involved.
+
+To switch from export to upload (or vice versa), change a single line in `.github/workflows/deploy.yml`:
+
+```bash
+# Export (current default)
+--url "${TMS_URI}/v2/nodes/export"
+
+# Upload (direct to a specific node)
+--url "${TMS_URI}/v2/nodes/upload"
+```
+
+The request body is identical for both endpoints.
+
+---
+
+## Modifying the Transport Description
+
+The description field in the export request accepts Latin letters, numbers, spaces, and `-._~:\/?#[]@!$&()*+,;=%` (max 512 characters). Any other character — such as apostrophes, em dashes, or non-Latin script — will cause cTMS to reject the request. The workflow already strips disallowed characters from the commit message using `tr`.
+
+### Available values from GitHub Actions
+
+You can combine any of the following to build a custom description:
+
+| Value | How to use | Example output |
+|---|---|---|
+| Short commit SHA | `${GITHUB_SHA::7}` | `a51038f` |
+| Full commit SHA | `$GITHUB_SHA` | `a51038f066dd...` |
+| Branch name | `$GITHUB_REF_NAME` | `main` |
+| Workflow run number | `$GITHUB_RUN_NUMBER` | `42` |
+| GitHub actor (triggering user) | `$GITHUB_ACTOR` | `sven-rullmann` |
+| Commit subject | `git log -1 --format='%s'` | `fix: correct order logic` |
+| Commit author name | `git log -1 --format='%an'` | `Sven Rullmann` |
+| Commit author email | `git log -1 --format='%ae'` | `sven@example.com` |
+| Commit date | `git log -1 --format='%ai'` | `2026-08-21 10:23:45 +0200` |
+
+### Example descriptions
+
+```bash
+# Default: short SHA + commit subject
+"${GITHUB_SHA::7} - ${COMMIT_MSG}"
+
+# Include branch and run number
+"${GITHUB_REF_NAME} - run ${GITHUB_RUN_NUMBER} - ${COMMIT_MSG}"
+
+# Include actor
+"${GITHUB_ACTOR} - ${GITHUB_SHA::7} - ${COMMIT_MSG}"
+```
+
+Always pipe the commit message through the sanitizer before using it in the description:
+
+```bash
+COMMIT_MSG=$(git log -1 --format='%s' | tr -cd 'a-zA-Z0-9 \-._~:/?#@!$&()*+,;=%')
+```
 
 ---
 
